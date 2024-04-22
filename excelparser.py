@@ -16,10 +16,13 @@ FORMATS = {
     'Kills': '.0f'
 }
 
+# Path to the Excel file
+EXCEL_FILE_PATH = "import/demo.xlsx"
+
 # Function to read Excel file into DataFrame
-def read_excel_to_dataframe(excel_file_path):
+def read_excel_to_dataframe(file_path, sheet):
     # Read Excel file into DataFrame
-    df = pd.read_excel(excel_file_path, sheet_name="Players")
+    df = pd.read_excel(file_path, sheet_name=sheet)
     return df
 
 def drawBarChart(df, yaxis_label, selected_team):
@@ -48,6 +51,29 @@ def drawBarChart(df, yaxis_label, selected_team):
     else:
         st.write("No data to display for selected team.")
 
+def drawWeaponChart(players):
+    st.write(players)
+    kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
+    kills_df = kills_df[kills_df['killer_name'].isin(players)]
+    result_df = kills_df.groupby(['killer_name', 'weapon_name']).size().reset_index(name='Count')
+    for player in players:
+        player_weapons_df = result_df[result_df['killer_name']==player]
+        sorted_df = player_weapons_df.sort_values(by='Count', ascending=False)
+        st.altair_chart(alt.Chart(sorted_df).mark_bar().encode(
+            x=alt.X('weapon_name', sort=None, title=player),
+            y=alt.Y('Count', title='Kills')   
+        ), use_container_width=False)
+
+        pie_chart = alt.Chart(sorted_df).mark_arc().encode(
+            color='weapon_name',
+            theta='Count'
+        )
+        # Render chart using Streamlit
+        st.altair_chart(pie_chart)
+
+def drawEntryKills(players):
+    pass
+
 # Main function to run the Streamlit web app
 def main():
     # Set page layout to wide
@@ -60,26 +86,25 @@ def main():
     if not os.path.exists("import"):
         os.makedirs("import")
 
-    # Path to the Excel file
-    excel_file_path = "import/demo.xlsx"
+    
 
     # File uploader to select Excel file
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
 
     if uploaded_file is None:
-        if not os.path.exists(excel_file_path):
+        if not os.path.exists(EXCEL_FILE_PATH):
             st.warning("Please upload an Excel file or place 'demo.xlsx' in the 'import' folder.")
             return
     else:
         # Save uploaded file to 'import' folder
-        with open(excel_file_path, "wb") as f:
+        with open(EXCEL_FILE_PATH, "wb") as f:
             f.write(uploaded_file.getvalue())
 
     # Read Excel file into DataFrame
-    df = read_excel_to_dataframe(excel_file_path)
+    players_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Players')
     
     # Get unique team names
-    team_names = df["team_name"].unique().tolist()
+    team_names = players_df["team_name"].unique().tolist()
     team_names.insert(0, "All")  # Add "All" option to the beginning
 
     # Dropdown selection for team filter
@@ -87,17 +112,19 @@ def main():
 
     # Filter DataFrame based on selected team
     if selected_team != "All":
-        filtered_df = df[df["team_name"] == selected_team]
+        filtered_players_df = players_df[players_df["team_name"] == selected_team]
     else:
-        filtered_df = df
+        filtered_players_df = players_df
     
     # Display filtered DataFrame
     st.write("### Filtered DataFrame:")
-    st.dataframe(filtered_df)
+    st.dataframe(filtered_players_df)
 
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
-    for key in LABELS.keys():
-        drawBarChart(filtered_df, key, selected_team)
+    # for key in LABELS.keys():
+    #     drawBarChart(filtered_df, key, selected_team)
+    if selected_team != 'All':
+        drawWeaponChart(filtered_players_df['name'].tolist())
 
 # Run the main function
 if __name__ == "__main__":
