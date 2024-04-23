@@ -71,8 +71,37 @@ def drawWeaponChart(players):
         # Render chart using Streamlit
         st.altair_chart(pie_chart)
 
-def drawEntryKills(players):
-    pass
+def drawEntryKills():
+    kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
+    # Find the index of the row with the smallest tick for each match_checksum & round_number combination
+    idx_min_tick = kills_df.groupby(['match_checksum', 'round_number'])['tick'].idxmin()
+
+    # Select the rows with the smallest tick
+    entry_kills_df = kills_df.loc[idx_min_tick]
+
+    # Group by killer_name and victim_name and count occurrences
+    killer_counts = entry_kills_df['killer_name'].value_counts().reset_index()
+    killer_counts.columns = ['Name', 'Kills']
+
+    victim_counts = entry_kills_df['victim_name'].value_counts().reset_index()
+    victim_counts.columns = ['Name', 'Deaths']
+
+    # Merge the counts
+    merged_counts = pd.merge(killer_counts, victim_counts, on='Name', how='outer').fillna(0)
+
+    # Create scatter plot
+    scatter_chart = alt.Chart(merged_counts).mark_circle().encode(
+        x='Kills',
+        y='Deaths',
+        tooltip=['Name', 'Kills', 'Deaths']
+    ).properties(
+        width=600,
+        height=400
+    )
+
+    # Render chart using Streamlit
+    st.write(scatter_chart)
+    
 
 # Main function to run the Streamlit web app
 def main():
@@ -88,17 +117,17 @@ def main():
 
     
 
-    # File uploader to select Excel file
-    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
+    # # File uploader to select Excel file
+    # uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
 
-    if uploaded_file is None:
-        if not os.path.exists(EXCEL_FILE_PATH):
-            st.warning("Please upload an Excel file or place 'demo.xlsx' in the 'import' folder.")
-            return
-    else:
-        # Save uploaded file to 'import' folder
-        with open(EXCEL_FILE_PATH, "wb") as f:
-            f.write(uploaded_file.getvalue())
+    # if uploaded_file is None:
+    #     if not os.path.exists(EXCEL_FILE_PATH):
+    #         st.warning("Please upload an Excel file or place 'demo.xlsx' in the 'import' folder.")
+    #         return
+    # else:
+    #     # Save uploaded file to 'import' folder
+    #     with open(EXCEL_FILE_PATH, "wb") as f:
+    #         f.write(uploaded_file.getvalue())
 
     # Read Excel file into DataFrame
     players_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Players')
@@ -123,8 +152,10 @@ def main():
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
     # for key in LABELS.keys():
     #     drawBarChart(filtered_df, key, selected_team)
-    if selected_team != 'All':
-        drawWeaponChart(filtered_players_df['name'].tolist())
+    # if selected_team != 'All':
+    #     drawWeaponChart(filtered_players_df['name'].tolist())
+
+    drawEntryKills()
 
 # Run the main function
 if __name__ == "__main__":
