@@ -91,7 +91,7 @@ def drawWeaponChart(players):
             # Render chart using Streamlit
             st.altair_chart(pie_chart)
 
-def drawEntryKills(players_df):
+def drawEntryKills(players_df, team_filter=False):
     kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
     # Find the index of the row with the smallest tick for each match_checksum & round_number combination
     idx_min_tick = kills_df.groupby(['match_checksum', 'round_number'])['tick'].idxmin()
@@ -108,22 +108,57 @@ def drawEntryKills(players_df):
 
     # Merge the counts
     merged_counts = pd.merge(killer_counts, victim_counts, on='Name', how='outer').fillna(0)
-    merged_counts_with_team = pd.merge(merged_counts, players_df, left_on='Name', right_on='name')
+    merged_counts_with_team = pd.merge(merged_counts, players_df, left_on='Name', right_on='name').rename(columns={'team_name': 'Team', 'Name': 'Player'})
 
     # Create scatter plot
     st.write('### Entry duels')
-    scatter_chart = alt.Chart(merged_counts_with_team).mark_circle().encode(
-        x='Kills',
-        y='Deaths',
-        color='team_name',
-        tooltip=['Name', 'Kills', 'Deaths', 'team_name']
-    ).properties(
-        width=600,
-        height=400
-    )
+    color_category = 'Team' if team_filter == False else 'Player'
+    max_value = max(merged_counts_with_team['Kills'].max(), merged_counts_with_team['Deaths'].max()) + 5
+    col1, col2 = st.columns(2)
+    with col1:
+        scatter_chart = alt.Chart(merged_counts_with_team).mark_circle().encode(
+            x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value])),
+            y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value])),
+            color=color_category,
+            tooltip=['Player', 'Kills', 'Deaths', 'Team']
+        )
 
-    # Render chart using Streamlit
-    st.write(scatter_chart)
+        # Define the data for the line
+        line_data = {'x': [0, max_value], 'y': [0, max_value]}
+
+        # Create a DataFrame from the line data
+        line_df = pd.DataFrame(line_data)
+
+        # Create a line chart for the diagonal line
+        line_chart = alt.Chart(line_df).mark_line(color='red').encode(
+            x='x',
+            y='y'
+        )
+
+        # Render chart using Streamlit
+        st.altair_chart(scatter_chart + line_chart, use_container_width=True)
+    with col2:
+        scatter_chart = alt.Chart(merged_counts_with_team).mark_circle().encode(
+            x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value])),
+            y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value])),
+            color=color_category,
+            tooltip=['Player', 'Kills', 'Deaths', 'Team']
+        )
+
+        # Define the data for the line
+        line_data = {'x': [0, max_value], 'y': [0, max_value]}
+
+        # Create a DataFrame from the line data
+        line_df = pd.DataFrame(line_data)
+
+        # Create a line chart for the diagonal line
+        line_chart = alt.Chart(line_df).mark_line(color='red').encode(
+            x='x',
+            y='y'
+        )
+
+        # Render chart using Streamlit
+        st.altair_chart(scatter_chart + line_chart, use_container_width=True)
     
 
 # Main function to run the Streamlit web app
@@ -164,8 +199,10 @@ def main():
 
     # Filter DataFrame based on selected team
     if selected_team != "All":
+        team_filter = True
         filtered_players_df = players_df[players_df["team_name"] == selected_team]
     else:
+        team_filter = False
         filtered_players_df = players_df
     
     # Display filtered DataFrame
@@ -173,12 +210,12 @@ def main():
     st.dataframe(filtered_players_df) # debug
 
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
-    # for key in LABELS.keys():
-    #     drawBarChart(filtered_df, key, selected_team)
+    for key in LABELS.keys():
+        drawBarChart(filtered_players_df, key, selected_team)
     if selected_team != 'All':
         drawWeaponChart(filtered_players_df['name'].tolist())
 
-    drawEntryKills(players_df)
+    drawEntryKills(filtered_players_df, team_filter)
 
 # Run the main function
 if __name__ == "__main__":
