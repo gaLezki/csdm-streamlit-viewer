@@ -16,6 +16,18 @@ FORMATS = {
     'Kills': '.0f'
 }
 
+WEAPON_COLORS = {
+    'AK-47': '#800000', 'AUG': '#8B4513', 'AWP': '#6B4226', 'CZ75 Auto': '#8B008B',
+    'Decoy Grenade': '#404040', 'Desert Eagle': '#B8860B', 'Dual Berettas': '#8B4513',
+    'FAMAS': '#8B0000', 'Five-SeveN': '#008080', 'Flashbang': '#006400', 'Galil AR': '#4B0082',
+    'Glock-18': '#004d00', 'HE Grenade': '#404040', 'Incendiary Grenade': '#8B0000', 'Knife': '#004d00',
+    'M4A1': '#006400', 'M4A4': '#00008B', 'MAC-10': '#8B4513', 'Molotov': '#8B0000', 'MP5-SD': '#556B2F',
+    'MP7': '#00008B', 'MP9': '#404040', 'Nova': '#4B0082', 'P2000': '#006400', 'P250': '#8B4513',
+    'P90': '#8B4513', 'SG 553': '#8B4513', 'Smoke Grenade': '#404040', 'SSG 08': '#004d00', 'Tec-9': '#8B4513',
+    'UMP-45': '#8B4513', 'USP-S': '#404040', 'XM1014': '#4B0082', 'Zeus x27': '#8B0000'
+}
+
+
 # Path to the Excel file
 EXCEL_FILE_PATH = "import/demo.xlsx"
 
@@ -52,26 +64,34 @@ def drawBarChart(df, yaxis_label, selected_team):
         st.write("No data to display for selected team.")
 
 def drawWeaponChart(players):
-    st.write(players)
     kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
     kills_df = kills_df[kills_df['killer_name'].isin(players)]
     result_df = kills_df.groupby(['killer_name', 'weapon_name']).size().reset_index(name='Count')
     for player in players:
         player_weapons_df = result_df[result_df['killer_name']==player]
         sorted_df = player_weapons_df.sort_values(by='Count', ascending=False)
-        st.altair_chart(alt.Chart(sorted_df).mark_bar().encode(
-            x=alt.X('weapon_name', sort=None, title=player),
-            y=alt.Y('Count', title='Kills')   
-        ), use_container_width=False)
+        sorted_df = sorted_df.rename(columns={"weapon_name": 'Weapon'})
+        col1, col2 = st.columns([3,1])
+        with col1:
+            # Create text layer for labels
+            st.altair_chart(alt.Chart(sorted_df).mark_bar().encode(
+                x=alt.X('Weapon', sort=None, title=player),
+                y=alt.Y('Count', title='Kills'),
+                color=alt.Color('Weapon', scale=alt.Scale(domain=list(WEAPON_COLORS.keys()), range=list(WEAPON_COLORS.values()))),
+            ).configure_legend(
+                disable=True  # Hide the legend
+            ), use_container_width=True)
+        with col2:
+            
 
-        pie_chart = alt.Chart(sorted_df).mark_arc().encode(
-            color='weapon_name',
-            theta='Count'
-        )
-        # Render chart using Streamlit
-        st.altair_chart(pie_chart)
+            pie_chart = alt.Chart(sorted_df).mark_arc().encode(
+                color=alt.Color('Weapon', scale=alt.Scale(domain=list(WEAPON_COLORS.keys()), range=list(WEAPON_COLORS.values()))),
+                theta='Count'
+            )
+            # Render chart using Streamlit
+            st.altair_chart(pie_chart)
 
-def drawEntryKills():
+def drawEntryKills(players_df):
     kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
     # Find the index of the row with the smallest tick for each match_checksum & round_number combination
     idx_min_tick = kills_df.groupby(['match_checksum', 'round_number'])['tick'].idxmin()
@@ -88,12 +108,15 @@ def drawEntryKills():
 
     # Merge the counts
     merged_counts = pd.merge(killer_counts, victim_counts, on='Name', how='outer').fillna(0)
+    merged_counts_with_team = pd.merge(merged_counts, players_df, left_on='Name', right_on='name')
 
     # Create scatter plot
-    scatter_chart = alt.Chart(merged_counts).mark_circle().encode(
+    st.write('### Entry duels')
+    scatter_chart = alt.Chart(merged_counts_with_team).mark_circle().encode(
         x='Kills',
         y='Deaths',
-        tooltip=['Name', 'Kills', 'Deaths']
+        color='team_name',
+        tooltip=['Name', 'Kills', 'Deaths', 'team_name']
     ).properties(
         width=600,
         height=400
@@ -147,15 +170,15 @@ def main():
     
     # Display filtered DataFrame
     st.write("### Filtered DataFrame:")
-    st.dataframe(filtered_players_df)
+    st.dataframe(filtered_players_df) # debug
 
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
     # for key in LABELS.keys():
     #     drawBarChart(filtered_df, key, selected_team)
-    # if selected_team != 'All':
-    #     drawWeaponChart(filtered_players_df['name'].tolist())
+    if selected_team != 'All':
+        drawWeaponChart(filtered_players_df['name'].tolist())
 
-    drawEntryKills()
+    drawEntryKills(players_df)
 
 # Run the main function
 if __name__ == "__main__":
