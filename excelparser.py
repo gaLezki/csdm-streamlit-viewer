@@ -159,7 +159,28 @@ def drawEntryKills(players_df, team_filter=False):
 
         # Render chart using Streamlit
         st.altair_chart(scatter_chart + line_chart, use_container_width=True)
-    
+
+def populateMatchData(row, selected_team):
+    score_column_name = f'Score ({selected_team})'
+    if row['name_team_a'] == selected_team:
+        row[score_column_name] = row['score_team_a']
+        row['Score (Enemy)'] = row['score_team_b'] 
+        row['Enemy'] = row['name_team_b']
+    else:
+        row[score_column_name] = row['score_team_b']
+        row['Score (Enemy)'] = row['score_team_a']
+        row['Enemy'] = row['name_team_a']
+    row['Result'] = 'W' if (row[score_column_name] > row['Score (Enemy)']) else 'L'
+    row['Map'] = row['map'][3:].capitalize()
+    return row
+
+def loadMatchHistory(selected_team):
+    match_columns = ['Result', 'Enemy', 'Map', f'Score ({selected_team})', 'Score (Enemy)']
+    matches_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Matches')
+    matches_df = matches_df[(matches_df['name_team_a']==selected_team) | (matches_df['name_team_b']==selected_team)]
+    matches_df = matches_df.apply(lambda row: populateMatchData(row, selected_team), axis=1)
+    matches_df = matches_df.sort_values(by='name')
+    st.write(matches_df[match_columns]) # debug
 
 # Main function to run the Streamlit web app
 def main():
@@ -201,21 +222,22 @@ def main():
     if selected_team != "All":
         team_filter = True
         filtered_players_df = players_df[players_df["team_name"] == selected_team]
+        loadMatchHistory(selected_team)
     else:
         team_filter = False
         filtered_players_df = players_df
     
     # Display filtered DataFrame
     st.write("### Filtered DataFrame:")
-    st.dataframe(filtered_players_df) # debug
+    # st.dataframe(filtered_players_df) # debug
 
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
-    for key in LABELS.keys():
-        drawBarChart(filtered_players_df, key, selected_team)
-    if selected_team != 'All':
-        drawWeaponChart(filtered_players_df['name'].tolist())
+    # for key in LABELS.keys():
+    #     drawBarChart(filtered_players_df, key, selected_team)
+    # if selected_team != 'All':
+    #     drawWeaponChart(filtered_players_df['name'].tolist())
 
-    drawEntryKills(filtered_players_df, team_filter)
+    # drawEntryKills(filtered_players_df, team_filter)
 
 # Run the main function
 if __name__ == "__main__":
