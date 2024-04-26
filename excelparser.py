@@ -27,9 +27,22 @@ WEAPON_COLORS = {
     'UMP-45': '#8B4513', 'USP-S': '#404040', 'XM1014': '#4B0082', 'Zeus x27': '#8B0000'
 }
 
+def colorize(val):
+    color = 'green' if val == 'W' else 'red'
+    return f'color: {color}'
 
 # Path to the Excel file
 EXCEL_FILE_PATH = "import/demo.xlsx"
+
+# Function to load Excel file into dataframe
+@st.cache_data
+def load_excel_file(file_path):
+    # Load Excel file into dataframe
+    xls = pd.ExcelFile(file_path)
+    sheets = {}
+    for sheet_name in xls.sheet_names:
+        sheets[sheet_name] = pd.read_excel(xls, sheet_name)
+    return sheets
 
 # Function to read Excel file into DataFrame
 def read_excel_to_dataframe(file_path, sheet):
@@ -63,8 +76,7 @@ def drawBarChart(df, yaxis_label, selected_team):
     else:
         st.write("No data to display for selected team.")
 
-def drawWeaponChart(players):
-    kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
+def drawWeaponChart(players, kills_df):
     kills_df = kills_df[kills_df['killer_name'].isin(players)]
     result_df = kills_df.groupby(['killer_name', 'weapon_name']).size().reset_index(name='Count')
     for player in players:
@@ -91,8 +103,7 @@ def drawWeaponChart(players):
             # Render chart using Streamlit
             st.altair_chart(pie_chart)
 
-def drawEntryKills(players_df, team_filter=False):
-    kills_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Kills')
+def drawEntryKills(kills_df, players_df, team_filter=False):
     # Find the index of the row with the smallest tick for each match_checksum & round_number combination
     idx_min_tick = kills_df.groupby(['match_checksum', 'round_number'])['tick'].idxmin()
 
@@ -172,21 +183,31 @@ def populateMatchData(row, selected_team):
         row['Enemy'] = row['name_team_a']
     row['Result'] = 'W' if (row[score_column_name] > row['Score (Enemy)']) else 'L'
     row['Map'] = row['map'][3:].capitalize()
+    row['Id'] = row['checksum']
     return row
 
-def loadMatchHistory(selected_team):
-    match_columns = ['Result', 'Enemy', 'Map', f'Score ({selected_team})', 'Score (Enemy)']
-    matches_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Matches')
+def loadMatchHistory(matches_df, rounds_df, kills_df, selected_team):
+    match_columns = ['Id', 'Result', 'Enemy', 'Map', f'Score ({selected_team})', 'Score (Enemy)']
     matches_df = matches_df[(matches_df['name_team_a']==selected_team) | (matches_df['name_team_b']==selected_team)]
     matches_df = matches_df.apply(lambda row: populateMatchData(row, selected_team), axis=1)
     matches_df = matches_df.sort_values(by='name')
-    st.write(matches_df[match_columns]) # debug
+    st.write(matches_df[match_columns].style.applymap(colorize, subset=['Result'])) # debug
+
+    match_id_list = matches_df['Id'].tolist()
+    match_id_list.insert(0,'-')
+    selected_match_id = st.selectbox('Show match stats', options=match_id_list, index=0)
+    if selected_match_id != '-':
+        rounds_df = rounds_df[rounds_df['match_checksum']==selected_match_id]
+        kills_df = kills_df[kills_df['match_checksum']==selected_match_id]
+        merged_df = pd.merge(rounds_df, kills_df, how='inner', left_on='number', right_on='round_number')
+        st.write(merged_df) # debug
 
 # Main function to run the Streamlit web app
 def main():
-    # Set page layout to wide
     st.set_page_config(layout="wide")
-
+    with st.spinner('Loading Excel file...'):
+        sheets = load_excel_file(EXCEL_FILE_PATH)
+    # Set page layout to wide
     # Set title of the web app
     st.title("Players Data")
 
@@ -209,7 +230,7 @@ def main():
     #         f.write(uploaded_file.getvalue())
 
     # Read Excel file into DataFrame
-    players_df = read_excel_to_dataframe(EXCEL_FILE_PATH, 'Players')
+    players_df = sheets['Players']
     
     # Get unique team names
     team_names = players_df["team_name"].unique().tolist()
@@ -222,7 +243,7 @@ def main():
     if selected_team != "All":
         team_filter = True
         filtered_players_df = players_df[players_df["team_name"] == selected_team]
-        loadMatchHistory(selected_team)
+        loadMatchHistory(sheets['Matches'], sheets['Rounds'], sheets['Kills'], selected_team)
     else:
         team_filter = False
         filtered_players_df = players_df
@@ -232,12 +253,12 @@ def main():
     # st.dataframe(filtered_players_df) # debug
 
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
-    # for key in LABELS.keys():
-    #     drawBarChart(filtered_players_df, key, selected_team)
-    # if selected_team != 'All':
-    #     drawWeaponChart(filtered_players_df['name'].tolist())
+    for key in LABELS.keys():
+        drawBarChart(filtered_players_df, key, selected_team)
+    if selected_team != 'All':
+        drawWeaponChart(filtered_players_df['name'].tolist(), sheets['Kills'])
 
-    # drawEntryKills(filtered_players_df, team_filter)
+    drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
 
 # Run the main function
 if __name__ == "__main__":
