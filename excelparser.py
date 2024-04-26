@@ -103,6 +103,14 @@ def drawWeaponChart(players, kills_df):
             # Render chart using Streamlit
             st.altair_chart(pie_chart)
 
+def drawRedLine(max_value):
+    line_data = {'x': [0, max_value], 'y': [0, max_value]}
+    line_df = pd.DataFrame(line_data)
+    return alt.Chart(line_df).mark_line(color='red').encode(
+        x='x',
+        y='y'
+    )
+
 def drawEntryKills(kills_df, players_df, team_filter=False):
     # Find the index of the row with the smallest tick for each match_checksum & round_number combination
     idx_min_tick = kills_df.groupby(['match_checksum', 'round_number'])['tick'].idxmin()
@@ -110,66 +118,63 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
     # Select the rows with the smallest tick
     entry_kills_df = kills_df.loc[idx_min_tick]
 
-    # Group by killer_name and victim_name and count occurrences
-    killer_counts = entry_kills_df['killer_name'].value_counts().reset_index()
-    killer_counts.columns = ['Name', 'Kills']
+    entry_kills_as_ct_df = entry_kills_df[(entry_kills_df['killer_side']==3) & (entry_kills_df['victim_side']==2)]
+    entry_kills_as_t_df = entry_kills_df[(entry_kills_df['killer_side']==2) & (entry_kills_df['victim_side']==3)]
 
-    victim_counts = entry_kills_df['victim_name'].value_counts().reset_index()
-    victim_counts.columns = ['Name', 'Deaths']
+    # Group by killer_name and victim_name and count occurrences
+    killer_counts_as_ct = entry_kills_as_ct_df['killer_name'].value_counts().reset_index()
+    killer_counts_as_t = entry_kills_as_t_df['killer_name'].value_counts().reset_index()
+
+    # Victim counts from other side
+    victim_counts_as_ct = entry_kills_as_t_df['victim_name'].value_counts().reset_index()
+    victim_counts_as_t = entry_kills_as_ct_df['victim_name'].value_counts().reset_index()
+
+    # Define columns for all
+    killer_counts_as_ct.columns = ['Name', 'Kills']
+    killer_counts_as_t.columns = ['Name', 'Kills']
+    victim_counts_as_ct.columns = ['Name', 'Deaths']
+    victim_counts_as_t.columns = ['Name', 'Deaths']
 
     # Merge the counts
-    merged_counts = pd.merge(killer_counts, victim_counts, on='Name', how='outer').fillna(0)
-    merged_counts_with_team = pd.merge(merged_counts, players_df, left_on='Name', right_on='name').rename(columns={'team_name': 'Team', 'Name': 'Player'})
+    merged_counts_as_ct = pd.merge(killer_counts_as_ct, victim_counts_as_ct, on='Name', how='outer').fillna(0)
+    merged_counts_ct_with_team = pd.merge(merged_counts_as_ct, players_df, left_on='Name', right_on='name').rename(columns={'team_name': 'Team', 'Name': 'Player'})
+    merged_counts_as_t = pd.merge(killer_counts_as_t, victim_counts_as_t, on='Name', how='outer').fillna(0)
+    merged_counts_t_with_team = pd.merge(merged_counts_as_t, players_df, left_on='Name', right_on='name').rename(columns={'team_name': 'Team', 'Name': 'Player'})
 
     # Create scatter plot
     st.write('### Entry duels')
-    color_category = 'Team' if team_filter == False else 'Player'
-    max_value = max(merged_counts_with_team['Kills'].max(), merged_counts_with_team['Deaths'].max()) + 5
+    with st.expander('How to read'):
+        st.write('Red line is only "1/1" help line, not average success rate or anything like that. Will calculate and draw actual key values later.')
+    color_category = 'Team' if team_filter == False else 'Player'    
     col1, col2 = st.columns(2)
     with col1:
-        scatter_chart = alt.Chart(merged_counts_with_team).mark_circle().encode(
-            x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value])),
-            y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value])),
+        max_value_ct = max(merged_counts_ct_with_team['Kills'].max(), merged_counts_ct_with_team['Deaths'].max()) + 2
+        scatter_chart = alt.Chart(merged_counts_ct_with_team).mark_circle().encode(
+            x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value_ct])),
+            y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value_ct]),),
             color=color_category,
             tooltip=['Player', 'Kills', 'Deaths', 'Team']
+        ).properties(
+            title='Entry duels (CT)'
         )
-
-        # Define the data for the line
-        line_data = {'x': [0, max_value], 'y': [0, max_value]}
-
-        # Create a DataFrame from the line data
-        line_df = pd.DataFrame(line_data)
-
-        # Create a line chart for the diagonal line
-        line_chart = alt.Chart(line_df).mark_line(color='red').encode(
-            x='x',
-            y='y'
-        )
-
-        # Render chart using Streamlit
-        st.altair_chart(scatter_chart + line_chart, use_container_width=True)
+        st.altair_chart(scatter_chart + drawRedLine(max_value_ct), use_container_width=True)
     with col2:
-        scatter_chart = alt.Chart(merged_counts_with_team).mark_circle().encode(
-            x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value])),
-            y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value])),
+        max_value_t = max(merged_counts_t_with_team['Kills'].max(), merged_counts_t_with_team['Deaths'].max()) + 2
+        scatter_chart = alt.Chart(merged_counts_t_with_team).mark_circle().encode(
+            x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value_t])),
+            y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value_t])),
             color=color_category,
             tooltip=['Player', 'Kills', 'Deaths', 'Team']
+        ).properties(
+            title='Entry duels (T)'
         )
-
-        # Define the data for the line
-        line_data = {'x': [0, max_value], 'y': [0, max_value]}
-
-        # Create a DataFrame from the line data
-        line_df = pd.DataFrame(line_data)
-
-        # Create a line chart for the diagonal line
-        line_chart = alt.Chart(line_df).mark_line(color='red').encode(
-            x='x',
-            y='y'
-        )
-
-        # Render chart using Streamlit
-        st.altair_chart(scatter_chart + line_chart, use_container_width=True)
+        st.altair_chart(scatter_chart + drawRedLine(max_value_t), use_container_width=True)
+    show_raw_entry_data_toggle_ct = st.toggle('Show raw data of all CT-sided entry kills', value=False)
+    if show_raw_entry_data_toggle_ct:
+        st.write(entry_kills_as_ct_df)
+    show_raw_entry_data_toggle_t = st.toggle('Show raw data of all T-sided entry kills', value=False)
+    if show_raw_entry_data_toggle_t:
+        st.write(entry_kills_as_ct_df)
 
 def populateMatchData(row, selected_team):
     score_column_name = f'Score ({selected_team})'
@@ -204,18 +209,20 @@ def loadMatchHistory(matches_df, rounds_df, kills_df, selected_team):
 
 # Main function to run the Streamlit web app
 def main():
-    st.set_page_config(layout="wide")
-    with st.spinner('Loading Excel file...'):
+    st.set_page_config(page_title='Unofficial CSDemoManager export parser', page_icon='📊', layout="wide", initial_sidebar_state="auto", menu_items=None)
+    with st.spinner('Loading data...'):
         sheets = load_excel_file(EXCEL_FILE_PATH)
     # Set page layout to wide
     # Set title of the web app
-    st.title("Players Data")
+    with st.expander('The what?'):
+        st.write('''**What is this?**\n\nTool that parses statistics using Excel exports provided by [CS Demo Manager](https://cs-demo-manager.com/). 
+                 Currently there's only one Excel file that contains statistics of 
+                 [Elisa Open Season 6](https://liquipedia.net/counterstrike/Elisa/Open_Suomi/Season_6).\n\n**Other questions/comments?**\n\nContact gaLezki @ Twitter''')
+
 
     # Check if 'import' folder exists, if not, create it
     if not os.path.exists("import"):
         os.makedirs("import")
-
-    
 
     # # File uploader to select Excel file
     # uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
@@ -248,9 +255,9 @@ def main():
         team_filter = False
         filtered_players_df = players_df
     
-    # Display filtered DataFrame
-    st.write("### Filtered DataFrame:")
-    # st.dataframe(filtered_players_df) # debug
+    show_raw_player_data = st.toggle('Show raw player data', value=False)
+    if show_raw_player_data:
+        st.dataframe(filtered_players_df) # debug
 
     # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
     for key in LABELS.keys():
