@@ -79,19 +79,20 @@ def drawBarChart(df, yaxis_label, selected_team):
 def drawWeaponChart(players, kills_df):
     kills_df = kills_df[kills_df['killer_name'].isin(players)]
     result_df = kills_df.groupby(['killer_name', 'weapon_name']).size().reset_index(name='Count')
+    st.write('### Kill distribution per weapon')
     for player in players:
         player_weapons_df = result_df[result_df['killer_name']==player]
         sorted_df = player_weapons_df.sort_values(by='Count', ascending=False)
         sorted_df = sorted_df.rename(columns={"weapon_name": 'Weapon'})
+        st.write(f'#### {player}')
         col1, col2 = st.columns([3,1])
-        with col1:
-            # Create text layer for labels
+        with col1:            
             st.altair_chart(alt.Chart(sorted_df).mark_bar().encode(
                 x=alt.X('Weapon', sort=None, title=player),
                 y=alt.Y('Count', title='Kills'),
                 color=alt.Color('Weapon', scale=alt.Scale(domain=list(WEAPON_COLORS.keys()), range=list(WEAPON_COLORS.values()))),
             ).configure_legend(
-                disable=True  # Hide the legend
+                disable=True
             ), use_container_width=True)
         with col2:
             
@@ -155,7 +156,7 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
             color=color_category,
             tooltip=['Player', 'Kills', 'Deaths', 'Team']
         ).properties(
-            title='Entry duels (CT)'
+            title='Entry duels (as CT)'
         )
         st.altair_chart(scatter_chart + drawRedLine(max_value_ct), use_container_width=True)
     with col2:
@@ -166,7 +167,7 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
             color=color_category,
             tooltip=['Player', 'Kills', 'Deaths', 'Team']
         ).properties(
-            title='Entry duels (T)'
+            title='Entry duels (as T)'
         )
         st.altair_chart(scatter_chart + drawRedLine(max_value_t), use_container_width=True)
     show_raw_entry_data_toggle_ct = st.toggle('Show raw data of all CT-sided entry kills', value=False)
@@ -200,7 +201,7 @@ def loadMatchHistory(matches_df, rounds_df, kills_df, selected_team):
 
     match_id_list = matches_df['Id'].tolist()
     match_id_list.insert(0,'-')
-    selected_match_id = st.selectbox('Show match stats', options=match_id_list, index=0)
+    selected_match_id = st.selectbox('Show match stats (not working yet)', options=match_id_list, index=0)
     if selected_match_id != '-':
         rounds_df = rounds_df[rounds_df['match_checksum']==selected_match_id]
         kills_df = kills_df[kills_df['match_checksum']==selected_match_id]
