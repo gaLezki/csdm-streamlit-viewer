@@ -217,6 +217,8 @@ def overallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, selected
             kills_df = kills_df[kills_df['match_checksum'].isin(match_id_list)]
             merged_df = pd.merge(rounds_df, kills_df, how='inner', left_on='number', right_on='round_number')
             st.dataframe(data=matches_df[match_columns].style.applymap(colorize, subset=['Result']),hide_index=True)
+        else:
+            st.write('Match list for all teams coming later. Works only for specific team for now.')
     show_raw_kbk_data = st.toggle('Show raw kill-by-kill data')
     if show_raw_kbk_data:
         st.write(merged_df) # debug
