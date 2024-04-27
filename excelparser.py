@@ -278,7 +278,7 @@ def main():
     else:
         team_filter = False
         filtered_players_df = players_df
-    overallStatsAndMatches(sheets['Matches'], sheets['Rounds'], sheets['Kills'], players_df, selected_team)
+    overallStatsAndMatches(sheets['Matches'], sheets['Rounds'], sheets['Kills'], filtered_players_df, selected_team)
     show_raw_player_data = st.toggle('Show raw player data', value=False)
     if show_raw_player_data:
         st.dataframe(filtered_players_df) # debug
