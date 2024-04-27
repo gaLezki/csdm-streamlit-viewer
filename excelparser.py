@@ -200,9 +200,8 @@ def overallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, selected
     col1, col2 = st.columns(2)
     with col1:
         players_columns = ['name', 'match_count', 'kill_count', 'death_count', 'assist_count', 'HLTV 2.0', 'kast', 'adr', 'first_kill_count', 'first_death_count']
-        if selected_team != 'All':
-            players_df = players_df[players_df['team_name']==selected_team]
         players_df = players_df[players_columns].rename(columns=PLAYER_COLUMN_RENAMES)
+        players_df['HLTV2*'] = players_df['HLTV2*'].map("{:.2f}".format)
         st.dataframe(data=players_df, hide_index=True)
     with col2:
         # Get all matches for specific team with all rounds and kills
@@ -219,9 +218,10 @@ def overallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, selected
             st.dataframe(data=matches_df[match_columns].style.applymap(colorize, subset=['Result']),hide_index=True)
         else:
             st.write('Match list for all teams coming later. Works only for specific team for now.')
-    show_raw_kbk_data = st.toggle('Show raw kill-by-kill data')
-    if show_raw_kbk_data:
-        st.write(merged_df) # debug
+    if selected_team != 'All':
+        show_raw_kbk_data = st.toggle('Show raw kill-by-kill data')
+        if show_raw_kbk_data:
+            st.write(merged_df)
 
     # selected_match_id = st.selectbox('Show match stats (not working yet)', options=match_id_list, index=0)
     # if selected_match_id != '-':
@@ -262,6 +262,7 @@ def main():
 
     # Read Excel file into DataFrame
     players_df = sheets['Players']
+    players_df['HLTV 2.0'] = players_df['HLTV 2.0'].round(2)
     
     # Get unique team names
     team_names = players_df["team_name"].unique().tolist()
@@ -277,7 +278,7 @@ def main():
     else:
         team_filter = False
         filtered_players_df = players_df
-    overallStatsAndMatches(sheets['Matches'], sheets['Rounds'], sheets['Kills'], sheets['Players'], selected_team)
+    overallStatsAndMatches(sheets['Matches'], sheets['Rounds'], sheets['Kills'], players_df, selected_team)
     show_raw_player_data = st.toggle('Show raw player data', value=False)
     if show_raw_player_data:
         st.dataframe(filtered_players_df) # debug
