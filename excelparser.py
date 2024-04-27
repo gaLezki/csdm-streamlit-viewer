@@ -27,12 +27,21 @@ WEAPON_COLORS = {
     'UMP-45': '#8B4513', 'USP-S': '#404040', 'XM1014': '#4B0082', 'Zeus x27': '#8B0000'
 }
 
+# One would think that these should change in the future
+SIDE_ID = {
+    'CT': 3,
+    'T': 2
+}
+
+PLAYER_COLUMN_RENAMES = {'name': 'Player', 'match_count': 'GP', 'kill_count': 'K', 
+                         'death_count': 'D', 'assist_count': 'A', 'HLTV 2.0': 'HLTV2*', 
+                         'kast': 'KAST-%', 'adr': 'ADR', 'first_kill_count': 'K (entry)', 'first_death_count': 'D (entry)'}
 def colorize(val):
     color = 'green' if val == 'W' else 'red'
     return f'color: {color}'
 
 # Path to the Excel file
-EXCEL_FILE_PATH = "import/demo.xlsx"
+EXCEL_FILE_PATH = os.path.dirname(os.path.abspath(__file__)) + "/import/demo.xlsx"
 
 # Function to load Excel file into dataframe
 @st.cache_data
@@ -43,12 +52,6 @@ def load_excel_file(file_path):
     for sheet_name in xls.sheet_names:
         sheets[sheet_name] = pd.read_excel(xls, sheet_name)
     return sheets
-
-# Function to read Excel file into DataFrame
-def read_excel_to_dataframe(file_path, sheet):
-    # Read Excel file into DataFrame
-    df = pd.read_excel(file_path, sheet_name=sheet)
-    return df
 
 def drawBarChart(df, yaxis_label, selected_team):
     yaxis = LABELS[yaxis_label]
@@ -119,8 +122,8 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
     # Select the rows with the smallest tick
     entry_kills_df = kills_df.loc[idx_min_tick]
 
-    entry_kills_as_ct_df = entry_kills_df[(entry_kills_df['killer_side']==3) & (entry_kills_df['victim_side']==2)]
-    entry_kills_as_t_df = entry_kills_df[(entry_kills_df['killer_side']==2) & (entry_kills_df['victim_side']==3)]
+    entry_kills_as_ct_df = entry_kills_df[(entry_kills_df['killer_side']==SIDE_ID['CT']) & (entry_kills_df['victim_side']==SIDE_ID['T'])]
+    entry_kills_as_t_df = entry_kills_df[(entry_kills_df['killer_side']==SIDE_ID['T']) & (entry_kills_df['victim_side']==SIDE_ID['CT'])]
 
     # Group by killer_name and victim_name and count occurrences
     killer_counts_as_ct = entry_kills_as_ct_df['killer_name'].value_counts().reset_index()
@@ -145,7 +148,7 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
     # Create scatter plot
     st.write('### Entry duels')
     with st.expander('How to read'):
-        st.write('Red line is only "1/1" help line, not average success rate or anything like that. Will calculate and draw actual key values later.')
+        st.write(f'Red line is only "50% success" help line, not average success rate or anything like that. Will calculate and draw actual key values later.')
     color_category = 'Team' if team_filter == False else 'Player'    
     col1, col2 = st.columns(2)
     with col1:
@@ -189,29 +192,49 @@ def populateMatchData(row, selected_team):
         row['Enemy'] = row['name_team_a']
     row['Result'] = 'W' if (row[score_column_name] > row['Score (Enemy)']) else 'L'
     row['Map'] = row['map'][3:].capitalize()
-    row['Id'] = row['checksum']
+    row['Match ID'] = row['checksum']
     return row
 
-def loadMatchHistory(matches_df, rounds_df, kills_df, selected_team):
-    match_columns = ['Id', 'Result', 'Enemy', 'Map', f'Score ({selected_team})', 'Score (Enemy)']
-    matches_df = matches_df[(matches_df['name_team_a']==selected_team) | (matches_df['name_team_b']==selected_team)]
-    matches_df = matches_df.apply(lambda row: populateMatchData(row, selected_team), axis=1)
-    matches_df = matches_df.sort_values(by='name')
-    st.write(matches_df[match_columns].style.applymap(colorize, subset=['Result'])) # debug
-
-    match_id_list = matches_df['Id'].tolist()
-    match_id_list.insert(0,'-')
-    selected_match_id = st.selectbox('Show match stats (not working yet)', options=match_id_list, index=0)
-    if selected_match_id != '-':
-        rounds_df = rounds_df[rounds_df['match_checksum']==selected_match_id]
-        kills_df = kills_df[kills_df['match_checksum']==selected_match_id]
-        merged_df = pd.merge(rounds_df, kills_df, how='inner', left_on='number', right_on='round_number')
+# TO-DO Add top fragger and entry kills per team to score table
+def overallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, selected_team):
+    col1, col2 = st.columns(2)
+    with col1:
+        players_columns = ['name', 'match_count', 'kill_count', 'death_count', 'assist_count', 'HLTV 2.0', 'kast', 'adr', 'first_kill_count', 'first_death_count']
+        if selected_team != 'All':
+            players_df = players_df[players_df['team_name']==selected_team]
+        players_df = players_df[players_columns].rename(columns=PLAYER_COLUMN_RENAMES)
+        st.dataframe(data=players_df, hide_index=True)
+    with col2:
+        # Get all matches for specific team with all rounds and kills
+        if selected_team != 'All': # For now, make this work with all teams later
+            match_columns = ['Match ID', 'Result', 'Enemy', 'Map', f'Score ({selected_team})', 'Score (Enemy)']
+            matches_df = matches_df[(matches_df['name_team_a']==selected_team) | (matches_df['name_team_b']==selected_team)]
+            matches_df = matches_df.apply(lambda row: populateMatchData(row, selected_team), axis=1)
+            matches_df = matches_df.sort_values(by='name')
+            match_id_list = matches_df['Match ID'].tolist()
+            match_id_list.insert(0,'-')
+            rounds_df = rounds_df[rounds_df['match_checksum'].isin(match_id_list)]
+            kills_df = kills_df[kills_df['match_checksum'].isin(match_id_list)]
+            merged_df = pd.merge(rounds_df, kills_df, how='inner', left_on='number', right_on='round_number')
+            st.dataframe(data=matches_df[match_columns].style.applymap(colorize, subset=['Result']),hide_index=True)
+        else:
+            st.write('Match list for all teams coming later. Works only for specific team for now.')
+    show_raw_kbk_data = st.toggle('Show raw kill-by-kill data')
+    if show_raw_kbk_data:
         st.write(merged_df) # debug
+
+    # selected_match_id = st.selectbox('Show match stats (not working yet)', options=match_id_list, index=0)
+    # if selected_match_id != '-':
+    #     rounds_df = rounds_df[rounds_df['match_checksum']==selected_match_id]
+    #     kills_df = kills_df[kills_df['match_checksum']==selected_match_id]
+    #     merged_df = pd.merge(rounds_df, kills_df, how='inner', left_on='number', right_on='round_number')
+    
+    
 
 # Main function to run the Streamlit web app
 def main():
     st.set_page_config(page_title='Unofficial CSDemoManager export parser', page_icon='📊', layout="wide", initial_sidebar_state="auto", menu_items=None)
-    with st.spinner('Loading data...'):
+    with st.spinner('Loading data to cache to make ultra fast queries...'):
         sheets = load_excel_file(EXCEL_FILE_PATH)
     # Set page layout to wide
     # Set title of the web app
@@ -251,22 +274,19 @@ def main():
     if selected_team != "All":
         team_filter = True
         filtered_players_df = players_df[players_df["team_name"] == selected_team]
-        loadMatchHistory(sheets['Matches'], sheets['Rounds'], sheets['Kills'], selected_team)
     else:
         team_filter = False
         filtered_players_df = players_df
-    
+    overallStatsAndMatches(sheets['Matches'], sheets['Rounds'], sheets['Kills'], sheets['Players'], selected_team)
     show_raw_player_data = st.toggle('Show raw player data', value=False)
     if show_raw_player_data:
         st.dataframe(filtered_players_df) # debug
-
-    # bar_y = st.selectbox('Bar chart value', options=LABELS.keys())
+    drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
     for key in LABELS.keys():
-        drawBarChart(filtered_players_df, key, selected_team)
+        if selected_team == 'All':
+            drawBarChart(filtered_players_df, key, selected_team)
     if selected_team != 'All':
         drawWeaponChart(filtered_players_df['name'].tolist(), sheets['Kills'])
-
-    drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
 
 # Run the main function
 if __name__ == "__main__":
