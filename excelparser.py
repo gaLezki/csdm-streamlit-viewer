@@ -3,17 +3,18 @@ import altair as alt
 import pandas as pd
 import os
 
+# TO-DO make one object that has labels and formats as own keys for all labels
 LABELS = {
-    'HLTV Rating 2.0 (allegedly reverse engineered)': 'HLTV 2.0',
+    'HLTV2': 'HLTV 2.0',
     'ADR': 'adr',
-    'KAST': 'kast',
+    'KAST-%': 'kast',
     'Kills': 'kill_count'
 }
-FORMATS = {
-    'HLTV Rating 2.0 (allegedly reverse engineered)': '.2f',
-    'ADR': '.1f',
-    'KAST': '.1f',
-    'Kills': '.0f'
+PRECISIONS = {
+    'HLTV2': 2,
+    'ADR': 1,
+    'KAST-%': 1,
+    'Kills': 0
 }
 
 WEAPON_COLORS = {
@@ -27,18 +28,29 @@ WEAPON_COLORS = {
     'UMP-45': '#8B4513', 'USP-S': '#404040', 'XM1014': '#4B0082', 'Zeus x27': '#8B0000'
 }
 
-# One would think that these should change in the future
+# One would think that these should change in the future, until then, let's go with this
 SIDE_ID = {
     'CT': 3,
     'T': 2
 }
 
 PLAYER_COLUMN_RENAMES = {'name': 'Player', 'match_count': 'GP', 'kill_count': 'K', 
-                         'death_count': 'D', 'assist_count': 'A', 'HLTV 2.0': 'HLTV2*', 
+                         'death_count': 'D', 'assist_count': 'A', 'HLTV 2.0': 'HLTV2', 
                          'kast': 'KAST-%', 'adr': 'ADR', 'first_kill_count': 'K (entry)', 'first_death_count': 'D (entry)'}
 def colorize(val):
     color = 'green' if val == 'W' else 'red'
     return f'color: {color}'
+
+# Not proud of using this for singular column too, but I wanted to move on to more important things
+def applyFormats(df, column=None):
+    if column == None:
+        for key in ('HLTV2', 'ADR', 'KAST-%'):
+            format_string = '{:.%df}' % PRECISIONS[key]
+            df[key] = format_string.format(df[key])
+    else:
+        format_string = '{:.%df}' % PRECISIONS[column]
+        df[column] = format_string.format(df[column])
+    return df
 
 # Path to the Excel file
 EXCEL_FILE_PATH = os.path.dirname(os.path.abspath(__file__)) + "/import/demo.xlsx"
@@ -53,28 +65,26 @@ def load_excel_file(file_path):
         sheets[sheet_name] = pd.read_excel(xls, sheet_name)
     return sheets
 
-def drawBarChart(df, yaxis_label, selected_team):
-    yaxis = LABELS[yaxis_label]
-    precision = FORMATS[yaxis_label]
+def drawBarChart(df, yaxis_label):
     # Bar chart
+    precision = '.%df' % PRECISIONS[yaxis_label]
     if not df.empty:
-        sorted_df = df.sort_values(by=[yaxis], ascending=False)
-        chart_data = sorted_df[["name", "team_name", yaxis]].reset_index()
+        sorted_df = df.sort_values(by=[LABELS[yaxis_label]], ascending=False)
+        chart_data = sorted_df[["name", "team_name", LABELS[yaxis_label]]].reset_index()
         chart_data = chart_data.rename(columns={"team_name": 'Team'}) # Bar chart doesn't understand column names with whitespace
-        if yaxis == 'HLTV 2.0':
-            yaxis = 'HLTV2'
-            chart_data = chart_data.rename(columns={"HLTV 2.0": yaxis}) # Bar chart doesn't understand column names with whitespace
         
         # Define color encoding based on team names
         domain = chart_data['Team'].unique().tolist()
         range_ = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']  # Eight different colors
-        
+        chart_data = chart_data.rename(columns={LABELS[yaxis_label]: yaxis_label})
+        chart_data = chart_data.apply(lambda row: applyFormats(row, yaxis_label), axis=1)
+        chart_data[yaxis_label] = chart_data[yaxis_label].astype(float)
         st.write(f"### {yaxis_label}")
         st.altair_chart(alt.Chart(chart_data).mark_bar().encode(
             x=alt.X('name', sort=None, title='Player'),
-            y=alt.Y(yaxis, title=yaxis_label),
+            y=alt.Y(yaxis_label, title=yaxis_label),
             color=alt.Color('Team', scale=alt.Scale(domain=domain, range=range_)),
-            text=alt.Text(yaxis, format=precision)
+            text=alt.Text(yaxis_label, format=precision)
         ), use_container_width=True)
     else:
         st.write("No data to display for selected team.")
@@ -201,7 +211,7 @@ def overallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, selected
     with col1:
         players_columns = ['name', 'match_count', 'kill_count', 'death_count', 'assist_count', 'HLTV 2.0', 'kast', 'adr', 'first_kill_count', 'first_death_count']
         players_df = players_df[players_columns].rename(columns=PLAYER_COLUMN_RENAMES)
-        players_df['HLTV2*'] = players_df['HLTV2*'].map("{:.2f}".format)
+        players_df = players_df.apply(lambda row: applyFormats(row), axis=1)
         st.dataframe(data=players_df, hide_index=True)
     with col2:
         # Get all matches for specific team with all rounds and kills
@@ -259,13 +269,9 @@ def main():
     #     # Save uploaded file to 'import' folder
     #     with open(EXCEL_FILE_PATH, "wb") as f:
     #         f.write(uploaded_file.getvalue())
-
-    # Read Excel file into DataFrame
-    players_df = sheets['Players']
-    players_df['HLTV 2.0'] = players_df['HLTV 2.0'].round(2)
     
     # Get unique team names
-    team_names = players_df["team_name"].unique().tolist()
+    team_names = sheets['Players']["team_name"].unique().tolist()
     team_names.insert(0, "All")  # Add "All" option to the beginning
 
     # Dropdown selection for team filter
@@ -274,18 +280,18 @@ def main():
     # Filter DataFrame based on selected team
     if selected_team != "All":
         team_filter = True
-        filtered_players_df = players_df[players_df["team_name"] == selected_team]
+        filtered_players_df = sheets['Players'][sheets['Players']["team_name"] == selected_team]
     else:
         team_filter = False
-        filtered_players_df = players_df
+        filtered_players_df = sheets['Players']
     overallStatsAndMatches(sheets['Matches'], sheets['Rounds'], sheets['Kills'], filtered_players_df, selected_team)
     show_raw_player_data = st.toggle('Show raw player data', value=False)
     if show_raw_player_data:
-        st.dataframe(filtered_players_df) # debug
+        st.dataframe(filtered_players_df)
     drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
     for key in LABELS.keys():
         if selected_team == 'All':
-            drawBarChart(filtered_players_df, key, selected_team)
+            drawBarChart(filtered_players_df, key)
     if selected_team != 'All':
         drawWeaponChart(filtered_players_df['name'].tolist(), sheets['Kills'])
 
