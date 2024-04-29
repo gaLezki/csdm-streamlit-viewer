@@ -1,45 +1,8 @@
 import streamlit as st
 import altair as alt
 import pandas as pd
+import excelparser_config as constants
 import os
-
-# MARK: Constants
-# TO-DO make one object that has labels and formats as own keys for all labels
-LABELS = {
-    'HLTV2': 'HLTV 2.0',
-    'ADR': 'adr',
-    'KAST-%': 'kast',
-    'Kills': 'kill_count'
-}
-PRECISIONS = {
-    'HLTV2': 2,
-    'ADR': 1,
-    'KAST-%': 1,
-    'Kills': 0
-}
-
-WEAPON_COLORS = {
-    'AK-47': '#800000', 'AUG': '#8B4513', 'AWP': '#6B4226', 'CZ75 Auto': '#8B008B',
-    'Decoy Grenade': '#404040', 'Desert Eagle': '#B8860B', 'Dual Berettas': '#8B4513',
-    'FAMAS': '#8B0000', 'Five-SeveN': '#008080', 'Flashbang': '#006400', 'Galil AR': '#4B0082',
-    'Glock-18': '#004d00', 'HE Grenade': '#404040', 'Incendiary Grenade': '#8B0000', 'Knife': '#004d00',
-    'M4A1': '#006400', 'M4A4': '#00008B', 'MAC-10': '#8B4513', 'Molotov': '#8B0000', 'MP5-SD': '#556B2F',
-    'MP7': '#00008B', 'MP9': '#404040', 'Nova': '#4B0082', 'P2000': '#006400', 'P250': '#8B4513',
-    'P90': '#8B4513', 'SG 553': '#8B4513', 'Smoke Grenade': '#404040', 'SSG 08': '#004d00', 'Tec-9': '#8B4513',
-    'UMP-45': '#8B4513', 'USP-S': '#404040', 'XM1014': '#4B0082', 'Zeus x27': '#8B0000'
-}
-
-# One would think that these should change in the future, until then, let's go with this
-SIDE_ID = {
-    'CT': 3,
-    'T': 2
-}
-
-PLAYER_COLUMN_RENAMES = {'name': 'Player', 'match_count': 'GP', 'kill_count': 'K', 
-                         'death_count': 'D', 'assist_count': 'A', 'HLTV 2.0': 'HLTV2', 
-                         'kast': 'KAST-%', 'adr': 'ADR', 'first_kill_count': 'K (entry)', 'first_death_count': 'D (entry)'}
-ALL_MATCHES_COLUMN_RENAMES = {'checksum': 'Match ID', 'name_team_a': 'Team A', 'name_team_b': 'Team B', 'score_team_a': 'A', 'score_team_b': 'B'}
-EXCEL_FILE_PATH = os.path.dirname(os.path.abspath(__file__)) + "/import/demo.xlsx"
 
 # We'll use Streamlit's cache to avoid loading data from file more than once
 @st.cache_data
@@ -61,10 +24,10 @@ def applyFormats(df, column=None):
     df = df.copy() # to avoid SettingWithCopyWarning
     if column == None:
         for key in ('HLTV2', 'ADR', 'KAST-%'):
-            format_string = '{:.%df}' % PRECISIONS[key]
+            format_string = '{:.%df}' % constants.PRECISIONS[key]
             df[key] = format_string.format(df[key])
     else:
-        format_string = '{:.%df}' % PRECISIONS[column]
+        format_string = '{:.%df}' % constants.PRECISIONS[column]
         df[column] = format_string.format(df[column])
     return df
 
@@ -85,22 +48,22 @@ def populateTeamMatchData(row, selected_team):
 
 # TO-DO, more stuff to this function 
 def populateAllMatchData(row):
-    row['Map'] = row['map'][3:].capitalize()
+    row['Map'] = row.copy()['map'][3:].capitalize()
     return row
 
 # MARK: Drawing functions
 def drawBarChart(df, yaxis_label):
     # Bar chart
-    precision = '.%df' % PRECISIONS[yaxis_label]
+    precision = '.%df' % constants.PRECISIONS[yaxis_label]
     if not df.empty:
-        sorted_df = df.sort_values(by=[LABELS[yaxis_label]], ascending=False)
-        chart_data = sorted_df[["name", "team_name", LABELS[yaxis_label]]].reset_index()
+        sorted_df = df.sort_values(by=[constants.LABELS[yaxis_label]], ascending=False)
+        chart_data = sorted_df[["name", "team_name", constants.LABELS[yaxis_label]]].reset_index()
         chart_data = chart_data.rename(columns={"team_name": 'Team'}) # Bar chart doesn't understand column names with whitespace
         
         # Define color encoding based on team names
         domain = chart_data['Team'].unique().tolist()
         range_ = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']  # Eight different colors
-        chart_data = chart_data.rename(columns={LABELS[yaxis_label]: yaxis_label})
+        chart_data = chart_data.rename(columns={constants.LABELS[yaxis_label]: yaxis_label})
         chart_data = chart_data.apply(lambda row: applyFormats(row, yaxis_label), axis=1)
         chart_data[yaxis_label] = chart_data[yaxis_label].astype(float)
         st.write(f"### {yaxis_label}")
@@ -127,13 +90,13 @@ def drawWeaponChart(players, kills_df):
             st.altair_chart(alt.Chart(sorted_df).mark_bar().encode(
                 x=alt.X('Weapon', sort=None, title=player),
                 y=alt.Y('Count', title='Kills'),
-                color=alt.Color('Weapon', scale=alt.Scale(domain=list(WEAPON_COLORS.keys()), range=list(WEAPON_COLORS.values()))),
+                color=alt.Color('Weapon', scale=alt.Scale(domain=list(constants.WEAPON_COLORS.keys()), range=list(constants.WEAPON_COLORS.values()))),
             ).configure_legend(
                 disable=True
             ), use_container_width=True)
         with col2:
             pie_chart = alt.Chart(sorted_df).mark_arc().encode(
-                color=alt.Color('Weapon', scale=alt.Scale(domain=list(WEAPON_COLORS.keys()), range=list(WEAPON_COLORS.values()))),
+                color=alt.Color('Weapon', scale=alt.Scale(domain=list(constants.WEAPON_COLORS.keys()), range=list(constants.WEAPON_COLORS.values()))),
                 theta='Count'
             )
             # Render chart using Streamlit
@@ -154,8 +117,8 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
     # Select the rows with the smallest tick
     entry_kills_df = kills_df.loc[idx_min_tick]
 
-    entry_kills_as_ct_df = entry_kills_df[(entry_kills_df['killer_side']==SIDE_ID['CT']) & (entry_kills_df['victim_side']==SIDE_ID['T'])]
-    entry_kills_as_t_df = entry_kills_df[(entry_kills_df['killer_side']==SIDE_ID['T']) & (entry_kills_df['victim_side']==SIDE_ID['CT'])]
+    entry_kills_as_ct_df = entry_kills_df[(entry_kills_df['killer_side']==constants.SIDE_ID['CT']) & (entry_kills_df['victim_side']==constants.SIDE_ID['T'])]
+    entry_kills_as_t_df = entry_kills_df[(entry_kills_df['killer_side']==constants.SIDE_ID['T']) & (entry_kills_df['victim_side']==constants.SIDE_ID['CT'])]
 
     # Group by killer_name and victim_name and count occurrences
     killer_counts_as_ct = entry_kills_as_ct_df['killer_name'].value_counts().reset_index()
@@ -217,7 +180,7 @@ def drawOverallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, sele
     col1, col2 = st.columns(2)
     with col1:
         players_columns = ['name', 'match_count', 'kill_count', 'death_count', 'assist_count', 'HLTV 2.0', 'kast', 'adr', 'first_kill_count', 'first_death_count']
-        players_df = players_df[players_columns].rename(columns=PLAYER_COLUMN_RENAMES)
+        players_df = players_df[players_columns].rename(columns=constants.PLAYER_COLUMN_RENAMES)
         players_df = players_df.apply(lambda row: applyFormats(row), axis=1)
         st.dataframe(data=players_df, hide_index=True)
     with col2:
@@ -231,7 +194,7 @@ def drawOverallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, sele
         else:
             all_matches_columns = ['Match ID', 'Map', 'Team A', 'A', 'B', 'Team B']
             matches_df = matches_df.apply(lambda row: populateAllMatchData(row), axis=1)
-            matches_df = matches_df.rename(columns=ALL_MATCHES_COLUMN_RENAMES)
+            matches_df = matches_df.rename(columns=constants.ALL_MATCHES_COLUMN_RENAMES)
             st.dataframe(data=matches_df[all_matches_columns],hide_index=True)
 
     show_raw_kbk_data = st.toggle('Show raw kill-by-kill data')
@@ -258,7 +221,7 @@ def drawOverallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, sele
 def main():
     st.set_page_config(page_title='Unofficial CSDemoManager export parser', page_icon='📊', layout="wide", initial_sidebar_state="auto", menu_items=None)
     with st.spinner('Loading data to cache to make ultra fast queries...'):
-        sheets = load_excel_file(EXCEL_FILE_PATH)
+        sheets = load_excel_file(constants.EXCEL_FILE_PATH)
     # Set page layout to wide
     # Set title of the web app
     with st.expander('The what?'):
@@ -302,8 +265,14 @@ def main():
     show_raw_player_data = st.toggle('Show raw player data', value=False)
     if show_raw_player_data:
         st.dataframe(filtered_players_df)
-    drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
-    for key in LABELS.keys():
+    try:
+        drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
+    except Exception as e:
+        if "Unrecognized data set" in str(e):
+            st.error("Streamlit tried to show dataset before it was fully loaded to cache. Please refresh the page to fix it.")
+        else:
+            st.error("An error occurred: {}".format(e))
+    for key in constants.LABELS.keys():
         if selected_team == 'All':
             drawBarChart(filtered_players_df, key)
     if selected_team != 'All':
