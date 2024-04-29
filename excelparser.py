@@ -58,6 +58,7 @@ def colorize(val):
 
 # Not proud of using this for singular column too, but I wanted to move on to more important things
 def applyFormats(df, column=None):
+    df = df.copy() # to avoid SettingWithCopyWarning
     if column == None:
         for key in ('HLTV2', 'ADR', 'KAST-%'):
             format_string = '{:.%df}' % PRECISIONS[key]
@@ -263,7 +264,8 @@ def main():
     with st.expander('The what?'):
         st.write('''**What is this?**\n\nTool that parses statistics using Excel exports provided by [CS Demo Manager](https://cs-demo-manager.com/). 
                  Currently there's only one Excel file that contains statistics of 
-                 [Elisa Open Season 6](https://liquipedia.net/counterstrike/Elisa/Open_Suomi/Season_6).\n\n**Other questions/comments?**\n\nContact gaLezki @ Twitter''')
+                 [Elisa Open Season 6](https://liquipedia.net/counterstrike/Elisa/Open_Suomi/Season_6).\n\n**Other questions/comments?**\n\nContact gaLezki @ Twitter
+                 \n\n**About "HLTV2"**\n\nI'm not sure how accurate representation that is of HLTV Rating 2.0 as the formula hasn't been published, so take it with a grain of salt.''')
 
 
     # Check if 'import' folder exists, if not, create it
