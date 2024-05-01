@@ -3,6 +3,7 @@ import altair as alt
 import pandas as pd
 import excelparser_config as constants
 import excelparser_graphs as graphs
+import excelparser_calculations as calc
 import os
 
 # We'll use Streamlit's cache to avoid loading data from file more than once
@@ -26,7 +27,7 @@ def main():
         st.write('''**What is this?**\n\nTool that parses statistics using Excel exports provided by [CS Demo Manager](https://cs-demo-manager.com/). 
                  Currently there's only one Excel file that contains statistics of 
                  [Elisa Open Season 6](https://liquipedia.net/counterstrike/Elisa/Open_Suomi/Season_6).\n\n**Other questions/comments?**\n\nContact gaLezki @ Twitter
-                 \n\n**About "HLTV2"**\n\nI'm not sure how accurate representation that is of HLTV Rating 2.0 as the formula hasn't been published, so take it with a grain of salt.''')
+                 \n\n**About "HLTV2"**\n\nIt seems that these reverse engineered HLTV 2.0 ratings are off by ±0.10 when comparing to actual HLTV 2.0 Ratings.''')
 
 
     # Check if 'import' folder exists, if not, create it
@@ -64,7 +65,8 @@ def main():
     if show_raw_player_data:
         st.dataframe(filtered_players_df)
     try:
-        graphs.drawEntryKills(sheets['Kills'], filtered_players_df, team_filter)
+        entry_data_dict = calc.calculateEntryKills(sheets['Kills'], filtered_players_df)
+        graphs.drawEntryKills(entry_data_dict, team_filter)
     except Exception as e:
         if "Unrecognized data set" in str(e):
             st.error("Streamlit tried to show dataset before it was fully loaded to cache. Please refresh the page to fix it.")

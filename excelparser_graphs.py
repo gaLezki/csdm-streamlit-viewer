@@ -97,36 +97,7 @@ def drawRedLine(max_value):
         y='y'
     )
 
-def drawEntryKills(kills_df, players_df, team_filter=False):
-    # Find the index of the row with the smallest tick for each match_checksum & round_number combination
-    idx_min_tick = kills_df.groupby(['match_checksum', 'round_number'])['tick'].idxmin()
-
-    # Select the rows with the smallest tick
-    entry_kills_df = kills_df.loc[idx_min_tick]
-
-    entry_kills_as_ct_df = entry_kills_df[(entry_kills_df['killer_side']==constants.SIDE_ID['CT']) & (entry_kills_df['victim_side']==constants.SIDE_ID['T'])]
-    entry_kills_as_t_df = entry_kills_df[(entry_kills_df['killer_side']==constants.SIDE_ID['T']) & (entry_kills_df['victim_side']==constants.SIDE_ID['CT'])]
-
-    # Group by killer_name and victim_name and count occurrences
-    killer_counts_as_ct = entry_kills_as_ct_df['killer_name'].value_counts().reset_index()
-    killer_counts_as_t = entry_kills_as_t_df['killer_name'].value_counts().reset_index()
-
-    # Victim counts from other side
-    victim_counts_as_ct = entry_kills_as_t_df['victim_name'].value_counts().reset_index()
-    victim_counts_as_t = entry_kills_as_ct_df['victim_name'].value_counts().reset_index()
-
-    # Define columns for all
-    killer_counts_as_ct.columns = ['Name', 'Kills']
-    killer_counts_as_t.columns = ['Name', 'Kills']
-    victim_counts_as_ct.columns = ['Name', 'Deaths']
-    victim_counts_as_t.columns = ['Name', 'Deaths']
-
-    # Merge the counts
-    merged_counts_as_ct = pd.merge(killer_counts_as_ct, victim_counts_as_ct, on='Name', how='outer').fillna(0)
-    merged_counts_ct_with_team = pd.merge(merged_counts_as_ct, players_df, left_on='Name', right_on='name').rename(columns={'team_name': 'Team', 'Name': 'Player'})
-    merged_counts_as_t = pd.merge(killer_counts_as_t, victim_counts_as_t, on='Name', how='outer').fillna(0)
-    merged_counts_t_with_team = pd.merge(merged_counts_as_t, players_df, left_on='Name', right_on='name').rename(columns={'team_name': 'Team', 'Name': 'Player'})
-
+def drawEntryKills(entry_data_dict, team_filter=False):
     # Create scatter plot
     st.write('### Entry duels')
     with st.expander('How to read'):
@@ -134,8 +105,8 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
     color_category = 'Team' if team_filter == False else 'Player'    
     col1, col2 = st.columns(2)
     with col1:
-        max_value_ct = max(merged_counts_ct_with_team['Kills'].max(), merged_counts_ct_with_team['Deaths'].max()) + 2
-        scatter_chart = alt.Chart(merged_counts_ct_with_team).mark_circle().encode(
+        max_value_ct = max(entry_data_dict['CT']['Kills'].max(), entry_data_dict['CT']['Deaths'].max()) + 2
+        scatter_chart = alt.Chart(entry_data_dict['CT']).mark_circle().encode(
             x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value_ct])),
             y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value_ct]),),
             color=color_category,
@@ -145,8 +116,8 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
         )
         st.altair_chart(scatter_chart + drawRedLine(max_value_ct), use_container_width=True)
     with col2:
-        max_value_t = max(merged_counts_t_with_team['Kills'].max(), merged_counts_t_with_team['Deaths'].max()) + 2
-        scatter_chart = alt.Chart(merged_counts_t_with_team).mark_circle().encode(
+        max_value_t = max(entry_data_dict['T']['Kills'].max(), entry_data_dict['T']['Deaths'].max()) + 2
+        scatter_chart = alt.Chart(entry_data_dict['T']).mark_circle().encode(
             x=alt.X('Deaths', scale=alt.Scale(domain=[0, max_value_t])),
             y=alt.Y('Kills', scale=alt.Scale(domain=[0, max_value_t])),
             color=color_category,
@@ -157,10 +128,10 @@ def drawEntryKills(kills_df, players_df, team_filter=False):
         st.altair_chart(scatter_chart + drawRedLine(max_value_t), use_container_width=True)
     show_raw_entry_data_toggle_ct = st.toggle('Show raw data of all CT-sided entry kills', value=False)
     if show_raw_entry_data_toggle_ct:
-        st.write(entry_kills_as_ct_df)
+        st.write(entry_data_dict['CT_raw'])
     show_raw_entry_data_toggle_t = st.toggle('Show raw data of all T-sided entry kills', value=False)
     if show_raw_entry_data_toggle_t:
-        st.write(entry_kills_as_ct_df)
+        st.write(entry_data_dict['T_raw'])
 
 # TO-DO Add top fragger and entry kills per team to score table
 def drawOverallStatsAndMatches(matches_df, rounds_df, kills_df, players_df, selected_team):
